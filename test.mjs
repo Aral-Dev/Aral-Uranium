@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ARAL URANIUM v1.1.0 — Comprehensive Live `workerd` + Playwright + TLS-over-VLESS E2E Suite (18/18 Suites)
+ * ARAL URANIUM v1.0.0 — Comprehensive Live `workerd` + Playwright + TLS-over-VLESS E2E Suite (17/17 Suites)
  */
 
 import assert from 'node:assert/strict';
@@ -207,38 +207,21 @@ async function startMockCloudflareAndGitHubServer(stateRecorder) {
     if (u.pathname === '/gh/repos/Aral-Dev/Aral-Uranium/releases/latest') {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({
-        tag_name: 'v1.2.0',
-        html_url: 'https://github.com/Aral-Dev/Aral-Uranium/releases/tag/v1.2.0',
+        tag_name: 'v1.1.0',
+        html_url: 'https://github.com/Aral-Dev/Aral-Uranium/releases/tag/v1.1.0',
         body: '- Official test release from Aral-Dev/Aral-Uranium',
         published_at: '2026-10-31T12:00:00Z',
         assets: [
           {
             name: 'worker-single-file.js',
-            browser_download_url: `${MOCK_BASE}/ghraw/Aral-Dev/Aral-Uranium/v1.2.0/worker-single-file.js`,
+            browser_download_url: `${MOCK_BASE}/ghraw/Aral-Dev/Aral-Uranium/v1.1.0/worker-single-file.js`,
           },
         ],
       }));
     }
     if (u.pathname === '/ghraw/Aral-Dev/Aral-Uranium/main/package.json') {
       res.writeHead(200, { 'content-type': 'application/json' });
-      return res.end(JSON.stringify({ name: 'aral', version: '1.1.0' })); // main branch matches installed
-    }
-    // URANIUM v1.1: data-pool files served by the official repo mock (full-fetch suite)
-    if (u.pathname === '/ghraw/Aral-Dev/Aral-Uranium/main/data/ips.txt') {
-      res.writeHead(200, { 'content-type': 'text/plain' });
-      return res.end(Array.from({ length: 60 }, (_, i) => `104.16.${Math.floor(i / 250)}.${(i % 250) + 1}`).join('\n'));
-    }
-    if (u.pathname === '/ghraw/Aral-Dev/Aral-Uranium/main/data/ip6.txt') {
-      res.writeHead(200, { 'content-type': 'text/plain' });
-      return res.end(Array.from({ length: 12 }, (_, i) => `2606:4700:${i}::6810:84e5`).join('\n'));
-    }
-    if (u.pathname === '/ghraw/Aral-Dev/Aral-Uranium/main/data/dom.txt') {
-      res.writeHead(200, { 'content-type': 'text/plain' });
-      return res.end(['a.example.com', 'b.example.com', 'c.example.com'].join('\n'));
-    }
-    if (u.pathname === '/ghraw/Aral-Dev/Aral-Uranium/main/data/proxy/ALL.txt') {
-      res.writeHead(200, { 'content-type': 'text/plain' });
-      return res.end(Array.from({ length: 25 }, (_, i) => `socks5://1.2.3.${i + 1}:1080`).join('\n'));
+      return res.end(JSON.stringify({ name: 'aral', version: '1.0.0' })); // main branch matches installed
     }
     if (u.pathname.endsWith('/worker-single-file.js')) {
       res.writeHead(200, { 'content-type': 'application/javascript' });
@@ -254,7 +237,7 @@ async function startMockCloudflareAndGitHubServer(stateRecorder) {
 }
 
 async function main() {
-  console.log('═══ ARAL URANIUM v1.1.0 Full Live Verification Suite (18/18) ═══');
+  console.log('═══ ARAL URANIUM v1.0.0 Full Live Verification Suite (17/17) ═══');
 
   const mockRecorder = { workerUploads: [] };
   const mockSrv = await startMockCloudflareAndGitHubServer(mockRecorder);
@@ -300,7 +283,7 @@ async function main() {
 
     // ── TEST 1: Health, Client-Info & Speed-Probe Endpoints (v3.0.0) ──
     const health = await (await fetch(`${BASE}/health`)).json();
-    assert.equal(health.version, '1.1.0', 'Health version must be 1.1.0');
+    assert.equal(health.version, '1.0.0', 'Health version must be 1.0.0');
     assert.notEqual(health.colo, 'EDGE', 'colo must never be EDGE');
 
     const ciRes = await fetch(`${BASE}/api/client-info`, {
@@ -333,7 +316,7 @@ async function main() {
     const cookie = (setupRes.headers.get('set-cookie') || '').split(';')[0];
     const boot = await setupRes.json();
 
-    assert.equal(boot.version, '1.1.0');
+    assert.equal(boot.version, '1.0.0');
     assert.equal(boot.updater.repo, 'Aral-Dev/Aral-Uranium', 'Hardcoded official GitHub repo must be Aral-Dev/Aral-Uranium');
     assert.equal(boot.updater.repoUrl, 'https://github.com/Aral-Dev/Aral-Uranium');
     assert.equal(boot.settings.remarkPrefix, undefined, 'remarkPrefix must be completely removed');
@@ -829,7 +812,7 @@ async function main() {
       dotVisible: !document.getElementById('gh-upd-dot')?.hidden,
     }));
     assert.equal(ghUi.repoHref, 'https://github.com/Aral-Dev/Aral-Uranium');
-    assert.equal(ghUi.remVer, 'V1.2.0', `Expected V1.2.0 from mock GitHub release, got: ${ghUi.remVer}`);
+    assert.equal(ghUi.remVer, 'V1.1.0', `Expected V1.1.0 from mock GitHub release, got: ${ghUi.remVer}`);
     assert.equal(ghUi.dotVisible, true, 'Update NEW indicator must appear when newer version exists on GitHub');
 
     await page.click('#btn-gh-apply');
@@ -1033,78 +1016,10 @@ async function main() {
     assert(reJson.settings && typeof reJson.settings.wsPath === 'string', 'settings must survive the recovery cycle');
     console.log('✓ [17/17] ULTRA v4.2 Extended -> feed alias, auto-update toggle, restart-core, pool sampling, per-user ports/poolType/req-reset, lifetime+deleted accounting, live heartbeat kill, CF-token recovery — ALL VERIFIED!');
 
-    // ── TEST 18 (URANIUM v1.1): Full repo fetch, picker, fixed IPs & config-count guard ──
-    // The recovery cycle in suite 17 re-initialized the panel — log in fresh.
-    const loginRes18 = await fetch(`${BASE}/api/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password: 'NewAdminPassword25!' }),
-    });
-    assert.equal(loginRes18.status, 200, 're-login must succeed after the recovery cycle');
-    const cookie18 = (loginRes18.headers.get('set-cookie') || '').split(';')[0];
-
-    // (a) full fetch from the (mocked) official repo — every entry must be persisted, not 8
-    const pfRes = await fetch(`${BASE}/api/pools/fetch`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: cookie18 },
-      body: JSON.stringify({ repo: 'Aral-Dev/Aral-Uranium' }),
-    });
-    assert.equal(pfRes.status, 200, 'pools fetch must succeed');
-    const pfJson = await pfRes.json();
-    assert.equal(pfJson.results.ips4, 60, `ips4 must save ALL 60 entries (got ${pfJson.results.ips4})`);
-    assert.equal(pfJson.results.ips6, 12, 'ips6 must save all 12 entries');
-    assert.equal(pfJson.results.dom, 3, 'dom must save all 3 entries');
-    assert.equal(pfJson.results.proxy, 25, 'proxy must save all 25 entries');
-
-    // (b) the RAM cache must not short-circuit a second, different fetch; ?full= returns everything
-    const fullRes = await fetch(`${BASE}/api/pools?full=ips4`, { headers: { cookie: cookie18 } });
-    const fullJson = await fullRes.json();
-    assert.equal(fullJson.count, 60, '?full= must report the complete count');
-    assert.equal(fullJson.list.length, 60, '?full= must return the complete list');
-    assert(fullJson.list.every((x) => /^104\.16\.\d+\.\d+$/.test(x)), 'full list entries must be valid IPv4');
-
-    // (c) clean-IP picker: requested count sampled from the FULL saved repository
-    const pickRes = await fetch(`${BASE}/api/pools?pick=17&pool=ipv4`, { headers: { cookie: cookie18 } });
-    const pickJson = await pickRes.json();
-    assert.equal(pickJson.count, 17, 'picker must return exactly the requested count');
-    assert(pickJson.list.every((x) => /^104\.16\.\d+\.\d+$/.test(x)), 'picker must return only IPv4 from the saved pool');
-    assert.equal(pickJson.available.ips4, 60, 'picker availability must reflect the full pool');
-
-    // (d) per-subscriber fixed (locked) config IPs: snapshot + never rotate
-    const lockCreate = await fetch(`${BASE}/api/users`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: cookie18 },
-      body: JSON.stringify({ name: 'fixed-ip-user', lockIps: true, ips: [] }),
-    });
-    assert.equal(lockCreate.status, 200, 'locked user must be created');
-    const lockJson = await lockCreate.json();
-    const lockUser = lockJson.users.find((u) => u.name === 'fixed-ip-user');
-    assert.equal(lockUser.lockIps, true, 'lockIps must persist');
-    assert.equal(lockUser.autoRotateIps, false, 'rotation must be force-disabled when locked');
-    assert(Array.isArray(lockUser.ips) && lockUser.ips.length > 0, 'locking with an empty list must snapshot panel cleanIPs');
-    const lockSubUrl = lockUser.urls.pressPass.replace(/^https:\/\//, 'http://');
-    const lockSubA = await (await fetch(lockSubUrl)).text();
-    const lockSubB = await (await fetch(lockSubUrl)).text();
-    assert.equal(lockSubA, lockSubB, 'locked subscription must be byte-identical across fetches (no rotation)');
-
-    // (e) config-count guard: rawNodeCount (uncapped) vs nodeCount (hard 200-node cap)
-    const manyIps = Array.from({ length: 80 }, (_, i) => `104.21.${Math.floor(i / 250)}.${(i % 250) + 1}`);
-    const bulkRes = await fetch(`${BASE}/api/users/${lockUser.id}`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json', cookie: cookie18 },
-      body: JSON.stringify({ ips: manyIps, lockIps: true }),
-    });
-    const bulkJson = await bulkRes.json();
-    const bulkUser = bulkJson.users.find((u) => u.id === lockUser.id);
-    assert(bulkUser.rawNodeCount > 200, `rawNodeCount must expose the uncapped estimate (got ${bulkUser.rawNodeCount})`);
-    assert.equal(bulkUser.nodeCount, 200, 'nodeCount must stay capped at 200');
-    assert.equal(bulkUser.ips.length, 80, 'per-user clean-IP list must keep all 80 entries (cap 200)');
-    console.log('✓ [18/18] URANIUM v1.1 -> full repo fetch (60/12/3/25 saved, cache-proof), ?full= list, repository picker (17/17), fixed locked IPs (byte-identical subs), rawNodeCount guard — ALL VERIFIED!');
-
     assert.equal(pageErrors.length, 0, `Unexpected browser JS errors: ${pageErrors.join('; ')}`);
     await browser.close();
     assert(!serverLogs.includes('Uncaught'), `Unexpected Uncaught in workerd logs:\n${serverLogs}`);
-    console.log('\nALL 18/18 ARAL URANIUM v1.1.0 E2E VERIFICATION SUITES PASSED WITH ZERO ERRORS!');
+    console.log('\nALL 17/17 ARAL URANIUM v1.0.0 E2E VERIFICATION SUITES PASSED WITH ZERO ERRORS!');
   } catch (err) {
     console.error('\nTEST FAILED:', err);
     if (serverLogs) console.error('SERVER LOGS:\n', serverLogs.slice(-1500));
