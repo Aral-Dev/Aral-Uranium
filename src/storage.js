@@ -18,7 +18,7 @@ import {
 } from './crypto.js';
 
 export const PANEL_BRAND = 'Aral Uranium';
-export const PANEL_VERSION = '1.0.0';
+export const PANEL_VERSION = '1.1.0';
 /** Official repository — data pools (data/ folder) AND panel self-update both resolve here. */
 export const GITHUB_REPO = 'Aral-Dev/Aral-Uranium';
 export const GITHUB_REPO_URL = 'https://github.com/Aral-Dev/Aral-Uranium';
@@ -472,9 +472,13 @@ export function normalizeUser(raw = {}, trustExistingHash = false) {
     proxyList: normalizeProxyList(safe.proxyList),
     autoRotateProxy: Boolean(safe.autoRotateProxy),
     // Per-user clean-IP list + rotation (empty = follow global cleanIPs)
-    ips: cleanStringList(safe.ips, 60),
+    // URANIUM: cap raised 60 → 200 so a full picker batch (up to 200 addresses) survives saving
+    ips: cleanStringList(safe.ips, 200),
     autoRotateIps: Boolean(safe.autoRotateIps),
-    ipCount: Math.min(120, safeNum(safe.ipCount)),
+    ipCount: Math.min(200, safeNum(safe.ipCount)),
+    // URANIUM: per-subscriber fixed/pinned config IPs — when true, the clean-IP
+    // list above is frozen: no rotation, no pool hydration, ever.
+    lockIps: Boolean(safe.lockIps),
     // Per-user content control (works even when global routing toggles are off)
     blockAdult: Boolean(safe.blockAdult),
     blockAds: Boolean(safe.blockAds),

@@ -19,6 +19,7 @@ import {
   applyAutoResets,
   beginPasswordRecovery,
   checkLoginRateLimit,
+  cleanStringList,
   clearLoginFailures,
   clearPendingUsage,
   clearRuntimeMemoryCaches,
@@ -54,7 +55,7 @@ import {
   renderDecoyGazette,
   serveSubscription,
 } from './sub.js';
-import { clearPool, getPool, invalidatePoolCache, parseListText, provisionPoolsFromRepo, sampleFrom, savePool, setActiveDataRepo } from './pools.js';
+import { clearPool, fetchRepoPoolDirect, getPool, invalidatePoolCache, parseListText, provisionPoolsFromRepo, rotateCleanAddresses, sampleFrom, savePool, setActiveDataRepo } from './pools.js';
 import { handleTgBotUpdate, setTgApiBase, tgBotConnect, tgBotDisconnect, tgBotPublicInfo, tgBotStatus } from './tgbot.js';
 import { getInlineAssets, getPanelHtml } from './generated/ui.js';
 
@@ -894,6 +895,8 @@ async function handleApi(request, url, env, runtime, ctx = {}) {
       ips: body.ips,
       autoRotateIps: Boolean(body.autoRotateIps),
       ipCount: body.ipCount,
+      // URANIUM: per-subscriber fixed/pinned config IPs (no rotation, ever)
+      lockIps: Boolean(body.lockIps),
       // ULTRA: rotation pool type + per-user port override
       poolType: body.poolType,
       ports: body.ports,
@@ -901,6 +904,12 @@ async function handleApi(request, url, env, runtime, ctx = {}) {
       blockAdult: Boolean(body.blockAdult),
       blockAds: Boolean(body.blockAds),
     });
+    /* URANIUM: locking with an empty list → snapshot the panel clean-IP list
+     * so the subscriber has a concrete, unchanging set of config addresses. */
+    if (newUser.lockIps && (!Array.isArray(newUser.ips) || !newUser.ips.length)) {
+      newUser.ips = cleanStringList(state.settings.cleanIPs || [], 200);
+    }
+    if (newUser.lockIps) newUser.autoRotateIps = false;
     clearPendingUsage(newUser.id);
     state.users = [...state.users, newUser];
     appendLog(state, 'user:add', `مشترک جدید ساخته شد: ${newUser.name}`);
@@ -1049,11 +1058,20 @@ async function handleApi(request, url, env, runtime, ctx = {}) {
             ips: body.ips !== undefined ? body.ips : cur.ips,
             autoRotateIps: body.autoRotateIps !== undefined ? Boolean(body.autoRotateIps) : cur.autoRotateIps,
             ipCount: body.ipCount !== undefined ? body.ipCount : cur.ipCount,
+            // URANIUM: per-subscriber fixed/pinned config IPs (no rotation, ever)
+            lockIps: body.lockIps !== undefined ? Boolean(body.lockIps) : Boolean(cur.lockIps),
             blockAdult: body.blockAdult !== undefined ? Boolean(body.blockAdult) : cur.blockAdult,
             blockAds: body.blockAds !== undefined ? Boolean(body.blockAds) : cur.blockAds,
           },
           pwUnchanged
         );
+        /* URANIUM: turning the IP lock ON with an empty list would leave nothing
+         * fixed — snapshot the panel's current clean-IP list so the lock is real. */
+        if (nextUsers[idx].lockIps && (!Array.isArray(nextUsers[idx].ips) || !nextUsers[idx].ips.length)) {
+          nextUsers[idx].ips = cleanStringList(state.settings.cleanIPs || [], 200);
+        }
+        // A locked list never rotates, whatever the rotation toggle says.
+        if (nextUsers[idx].lockIps) nextUsers[idx].autoRotateIps = false;
         state.users = nextUsers;
         appendLog(state, 'user:edit', `ویرایش مشترک: ${state.users[idx].name}`);
       }
@@ -1120,6 +1138,32 @@ async function handleApi(request, url, env, runtime, ctx = {}) {
 
   // ---- ULTRA: pools API (community clean-IP & exit-proxy databases) ----
   if (path === '/api/pools' && method === 'GET') {
+    // URANIUM: `?full=<kind>` — return the COMPLETE stored list (not just a sample)
+    // so the panel editor can load / review every saved entry.
+    const fullKind = String(url.searchParams.get('full') || '').trim();
+    if (fullKind) {
+      if (!['proxy', 'ips4', 'ips6', 'dom'].includes(fullKind)) {
+        return json({ ok: false, error: 'نوع مخزن نامعتبر است.' }, 400);
+      }
+      const data = await getPool(env, fullKind);
+      return json({ ok: true, kind: fullKind, count: data.length, list: data });
+    }
+    // URANIUM: `?pick=<count>&pool=mixed|ipv4|ipv6|domain` — clean-IP picker for
+    // the subscriber form: samples the requested number from the FULL saved pools.
+    const pickCount = Number(url.searchParams.get('pick'));
+    if (Number.isFinite(pickCount) && pickCount > 0) {
+      const want = Math.max(1, Math.min(200, Math.floor(pickCount)));
+      const poolTypeRaw = String(url.searchParams.get('pool') || 'mixed').trim();
+      const poolType = ['ipv4', 'ipv6', 'domain'].includes(poolTypeRaw) ? poolTypeRaw : '';
+      const [p4, p6, pd] = await Promise.all([getPool(env, 'ips4'), getPool(env, 'ips6'), getPool(env, 'dom')]);
+      const picked = await rotateCleanAddresses(env, { ipCount: want, poolType }, state.settings);
+      return json({
+        ok: true,
+        count: (picked.list || []).length,
+        list: picked.list || [],
+        available: { ips4: p4.length, ips6: p6.length, dom: pd.length },
+      });
+    }
     // ULTRA: `?sample=proxy&count=N` — random probe candidates for the smart
     // multi-location provisioner (one-tap provisioning)
     const sampleKind = String(url.searchParams.get('sample') || '').trim();
@@ -1182,15 +1226,23 @@ async function handleApi(request, url, env, runtime, ctx = {}) {
     if (!/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(repo)) {
       return json({ ok: false, error: 'قالب مخزن باید owner/repo باشد.' }, 400);
     }
+    /* URANIUM FIX: fetch the repository files DIRECTLY (no RAM/KV shortcut) and
+     * persist EVERY parsed entry (up to the pool limits) — previously this route
+     * could return a tiny cached sample (e.g. 8 entries) instead of the full list. */
     const kinds = ['ips4', 'ips6', 'dom', 'proxy'];
     const results = {};
     for (const kind of kinds) {
-      const data = await getPool({ ...env, __settingsDataRepo: repo }, kind, { forceRepo: true });
-      results[kind] = data.length;
-      if (data.length) await savePool(env, kind, data);
+      const data = await fetchRepoPoolDirect(env, repo, kind);
+      if (data && data.length) {
+        results[kind] = data.length;
+        await savePool(env, kind, data);
+      } else {
+        results[kind] = 0; // keep any existing pool untouched
+      }
     }
+    invalidatePoolCache();
     state.settings = sanitizeSettings({ ...state.settings, dataRepo: repo }, state.settings);
-    appendLog(state, 'pools', `دریافت مخازن از ${repo} انجام شد`);
+    appendLog(state, 'pools', `دریافت کامل مخازن از ${repo} انجام شد (ips4: ${results.ips4} · ips6: ${results.ips6} · dom: ${results.dom} · proxy: ${results.proxy})`);
     await saveRuntimeState(env, state);
     return json({ ok: true, repo, results });
   }
@@ -1595,10 +1647,14 @@ function buildAdminUserSummary(user, settings, host) {
     ips: Array.isArray(v.ips) ? v.ips : [],
     autoRotateIps: Boolean(v.autoRotateIps),
     ipCount: v.ipCount || 0,
+    lockIps: Boolean(v.lockIps),
     blockAdult: Boolean(v.blockAdult),
     blockAds: Boolean(v.blockAds),
     statusUrl: `https://${host}/status/${encodeURIComponent(v.subToken)}`,
     nodeCount: quickMeta.nodeCount,
+    // URANIUM: uncapped estimate — the subscription itself is hard-capped at 200
+    // nodes, so the UI warns the admin when the settings would exceed that.
+    rawNodeCount: quickMeta.rawNodeCount,
     urls: {
       pressPass: subBase,
       normalSub: `${subBase}?format=b64`,

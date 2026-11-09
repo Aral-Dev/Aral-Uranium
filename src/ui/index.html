@@ -1096,8 +1096,8 @@
         <div class="card">
           <p class="kicker"><svg class="ic"><use href="#i-server"/></svg><span class="fa">مخازن داده (چرخش IP تمیز و لوکیشن‌های خروجی)</span><span class="en">DATA POOLS (CLEAN-IP ROTATION &amp; EXIT LOCATIONS)</span></p>
           <p class="hint">
-            <span class="fa">این مخازن سوخت چرخشِ خودکار IP تمیز، دکمه‌های ساخت سریع لوکیشن و تعویض خودکارِ پروکسی خراب هستند. می‌توانید متن را مستقیم بچسبانید یا از یک مخزن GitHub (پوشهٔ <code>data/</code>) دریافت کنید.</span>
-            <span class="en">These pools power clean-IP auto-rotation, quick location creation and broken-proxy auto-replace. Paste text directly or fetch from a GitHub repo's <code>data/</code> folder.</span>
+            <span class="fa">این مخازن سوخت چرخشِ خودکار IP تمیز، دکمه‌های ساخت سریع لوکیشن و تعویض خودکارِ پروکسی خراب هستند. می‌توانید متن را مستقیم بچسبانید یا از یک مخزن GitHub (پوشهٔ <code>data/</code>) <strong>کل فایل را دریافت و ذخیره کنید</strong>.</span>
+            <span class="en">These pools power clean-IP auto-rotation, quick location creation and broken-proxy auto-replace. Paste text directly or fetch the <strong>entire files</strong> from a GitHub repo's <code>data/</code> folder.</span>
           </p>
           <div class="pool-kinds" id="pool-kinds">
             <button class="btn ghost sm-btn pool-kind active" data-kind="proxy" type="button"><span class="fa">پروکسی‌های خروجی</span><span class="en">EXIT PROXIES</span></button>
@@ -1106,15 +1106,25 @@
             <button class="btn ghost sm-btn pool-kind" data-kind="dom" type="button"><span class="fa">دامنه‌ها</span><span class="en">DOMAINS</span></button>
             <span class="mono sm" id="pool-count" style="margin-inline-start:auto">—</span>
           </div>
+          <div class="pool-stat-badges" id="pool-stat-badges">
+            <span class="badge mono" data-poolstat="proxy">PROXY —</span>
+            <span class="badge mono" data-poolstat="ips4">IPv4 —</span>
+            <span class="badge mono" data-poolstat="ips6">IPv6 —</span>
+            <span class="badge mono" data-poolstat="dom">DOM —</span>
+          </div>
           <textarea id="pool-text" dir="ltr" style="min-height:120px;margin-top:8px" placeholder="socks5://user:pass@host:port&#10;socks5://1.2.3.4:1080&#10;..."></textarea>
           <div class="actions" style="margin-top:8px">
             <button class="btn sm-btn" id="btn-pool-save" type="button"><svg class="ic ic-sm"><use href="#i-check"/></svg><span class="fa">ذخیرهٔ مخزن</span><span class="en">SAVE POOL</span></button>
-            <button class="btn ghost sm-btn" id="btn-pool-load" type="button"><span class="fa">نمایش فعلی</span><span class="en">LOAD CURRENT</span></button>
+            <button class="btn ghost sm-btn" id="btn-pool-load" type="button"><svg class="ic ic-sm"><use href="#i-download"/></svg><span class="fa">بارگذاری کل مخزن ذخیره‌شده</span><span class="en">LOAD FULL POOL</span></button>
             <button class="btn danger sm-btn" id="btn-pool-clear" type="button"><span class="fa">پاک کردن</span><span class="en">CLEAR</span></button>
             <button class="btn ghost sm-btn" id="btn-pool-provision" type="button"><svg class="ic ic-sm"><use href="#i-radar"/></svg><span class="fa">نصب پیش‌فرض‌ها از مخزن رسمی</span><span class="en">INSTALL OFFICIAL DEFAULTS</span></button>
             <input id="pool-repo" dir="ltr" type="text" placeholder="Aral-Dev/Aral-Uranium" style="flex:1;min-width:150px">
-            <button class="btn ghost sm-btn" id="btn-pool-fetch" type="button"><svg class="ic ic-sm"><use href="#i-cloud-up"/></svg><span class="fa">دریافت از گیت‌هاب</span><span class="en">FETCH FROM GITHUB</span></button>
+            <button class="btn ghost sm-btn" id="btn-pool-fetch" type="button"><svg class="ic ic-sm"><use href="#i-cloud-up"/></svg><span class="fa">دریافت کامل از گیت‌هاب و ذخیره</span><span class="en">FETCH ALL &amp; SAVE</span></button>
           </div>
+          <p class="hint">
+            <span class="fa">«دریافت کامل از گیت‌هاب» هر چهار فایل مخزن را مستقیم می‌خواند و <strong>همهٔ موارد معتبر را (تا سقف هر مخزن)</strong> در KV ذخیره می‌کند — دیگر فقط ۸ نمونه نمایشی نیست. «بارگذاری کل مخزن» فهرست کاملِ ذخیره‌شده را برای ویرایش در ویرایشگر می‌ریزد.</span>
+            <span class="en">“Fetch all &amp; save” pulls the four repository files directly and persists <strong>every valid entry (up to each pool's cap)</strong> into KV — no more 8-sample truncation. “Load full pool” drops the complete stored list into the editor for review.</span>
+          </p>
         </div>
 
         <div class="cols-even">
@@ -1653,15 +1663,54 @@
         <p class="sm labor" id="uf-smart-status" hidden style="margin-top:6px"></p>
 
         <div class="dotted" style="margin:14px 0"></div>
+
+        <!-- URANIUM: fixed / pinned config IPs (per subscriber) -->
+        <p class="fld-label"><span class="fa">ثابت‌کردن آی‌پی کانفیگ (قفل آی‌پی)</span><span class="en">FIXED CONFIG IPs (IP LOCK)</span></p>
+        <label class="chk"><input id="uf-lock-ips" type="checkbox"><span><span class="fa"><strong>آی‌پی کانفیگ‌های این مشترک ثابت بمانند</strong> — چرخش خودکار کاملاً خاموش می‌شود و فهرستِ زیر، همیشه با همین آی‌پی‌ها در اشتراک می‌ماند</span><span class="en"><strong>Keep this subscriber's config IPs fixed</strong> — rotation is fully disabled and the list below is pinned forever</span></span></label>
+        <p class="hint" id="uf-lock-hint" hidden>
+          <span class="fa">قفل فعال است: فهرستِ «IPهای تمیز اختصاصی» پایین‌تر، آی‌پی‌های ثابتِ کانفیگ‌های این مشترک است و با هیچ چرخشی عوض نمی‌شود. با دکمهٔ «انتخاب از مخزن داده» می‌توانید فهرست ثابت را از کل مخزن پر کنید؛ با برداشتن قفل، چرخش خودکار دوباره در دسترس قرار می‌گیرد.</span>
+          <span class="en">Lock is ON: the per-user clean-IP list below is the fixed set of config addresses and never rotates. Use the repository picker to refill the fixed list; unchecking re-enables auto-rotation.</span>
+        </p>
+
+        <div class="dotted" style="margin:14px 0"></div>
         <p class="fld-label"><span class="fa">IPهای تمیز اختصاصی این مشترک (خالی = پیش‌فرض پنل)</span><span class="en">PER-USER CLEAN IPs (EMPTY = PANEL DEFAULT)</span></p>
         <textarea id="uf-ips" dir="ltr" style="min-height:80px" placeholder="172.67.73.163&#10;104.16.0.7"></textarea>
+
+        <!-- URANIUM: clean-IP picker from the FULL data repository -->
+        <div class="ippick-box">
+          <p class="fld-label" style="margin:8px 0 0"><span class="fa">انتخاب از مخزن داده (کل آی‌پی‌های تمیز ذخیره‌شده)</span><span class="en">PICK FROM DATA REPOSITORY (ALL SAVED CLEAN IPs)</span></p>
+          <div class="field-grid" style="margin-top:6px">
+            <div>
+              <label class="fld-label" for="uf-pick-type"><span class="fa">نوع آدرس</span><span class="en">ADDRESS TYPE</span></label>
+              <select id="uf-pick-type" class="fa-sel">
+                <option value="" class="fa">ترکیبی (IP۴ + IP۶ + دامنه)</option><option value="" class="en">MIXED (v4 + v6 + DOMAINS)</option>
+                <option value="ipv4" class="fa">فقط IPv4</option><option value="ipv4" class="en">IPV4 ONLY</option>
+                <option value="ipv6" class="fa">فقط IPv6</option><option value="ipv6" class="en">IPV6 ONLY</option>
+                <option value="domain" class="fa">فقط دامنه</option><option value="domain" class="en">DOMAINS ONLY</option>
+              </select>
+            </div>
+            <div>
+              <label class="fld-label" for="uf-pick-count"><span class="fa">تعداد درخواستی</span><span class="en">REQUESTED COUNT</span></label>
+              <input id="uf-pick-count" type="number" min="1" max="200" value="15">
+            </div>
+          </div>
+          <div class="actions" style="margin-top:8px">
+            <button class="btn ghost sm-btn" id="uf-pick-btn" type="button">
+              <svg class="ic ic-sm"><use href="#i-server"/></svg>
+              <span class="fa">اسکن مخزن و درج تعداد درخواستی</span><span class="en">SCAN REPO &amp; INSERT PICKED</span>
+            </button>
+            <span class="mono sm" id="uf-pick-avail">—</span>
+          </div>
+          <p class="hint"><span class="fa">همهٔ آی‌پی‌های تمیزِ ذخیره‌شده در مخزن داده اسکن و به‌صورت تصادفیِ متناسب، به تعداد درخواستی برای این مشترک انتخاب و در فهرست بالا درج می‌شود (جایگزین فهرست فعلی).</span><span class="en">The entire saved clean-IP repository is scanned and the requested number of addresses is picked and inserted above (replacing the current list).</span></p>
+        </div>
+
         <div class="check-list" style="margin-top:8px">
           <label class="chk"><input id="uf-autorot-ips" type="checkbox"><span><span class="fa">چرخش خودکار IP تمیز از مخازن، در هر دریافت اشتراک</span><span class="en">AUTO-ROTATE clean IPs from pools on every sub fetch</span></span></label>
         </div>
-        <div class="field-grid" style="margin-top:8px">
+        <div class="field-grid" style="margin-top:8px" id="uf-rot-fields">
           <div>
             <label class="fld-label" for="uf-ipcount"><span class="fa">تعداد IP هر چرخش</span><span class="en">IPs PER ROTATION</span></label>
-            <input id="uf-ipcount" type="number" min="1" max="120" value="15">
+            <input id="uf-ipcount" type="number" min="1" max="200" value="15">
           </div>
           <div>
             <label class="fld-label" for="uf-pooltype"><span class="fa">نوعِ مخزنِ چرخش</span><span class="en">ROTATION POOL TYPE</span></label>
@@ -1673,6 +1722,15 @@
             </select>
           </div>
         </div>
+
+        <!-- URANIUM: live config-count estimator -->
+        <div class="cfgcount-row" id="uf-cfgcount-row">
+          <span class="fld-label" style="margin:0"><span class="fa">تعداد کانفیگ‌های این مشترک (تخمین زنده)</span><span class="en">ESTIMATED CONFIG COUNT (LIVE)</span></span>
+          <span class="badge mono" id="uf-cfgcount" dir="ltr">—</span>
+          <span class="mono sm" id="uf-cfgcount-note"></span>
+        </div>
+        <p class="hint"><span class="fa">فرمول: (دامنهٔ اصلی + دامنه‌های سفارشی + IPهای تمیز) × پورت‌ها × پروتکل‌ها × (لوکیشن‌ها + ۱). سقف اشتراک ۲۰۰ نود است؛ اگر از ۲۰۰ بگذرد هشدار می‌گیرید.</span><span class="en">Formula: (main domain + custom domains + clean IPs) × ports × protocols × (locations + 1). The subscription is capped at 200 nodes; exceeding it triggers a warning.</span></p>
+
         <div style="margin-top:8px">
           <label class="fld-label" for="uf-ports"><span class="fa">پورت‌های اختصاصی این مشترک (خالی = پورت‌های پنل؛ مثال: 443,8443 یا 2053,80)</span><span class="en">PER-USER PORTS (EMPTY = PANEL PORTS; e.g. 443,8443 or 2053,80)</span></label>
           <input id="uf-ports" dir="ltr" type="text" autocomplete="off" placeholder="443,2053,8443">
@@ -1696,6 +1754,32 @@
         <span class="err" id="uf-err" hidden></span>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- URANIUM: config-count > 200 warning (Zeus-style, continue-or-reduce) -->
+<div class="modal-backdrop" id="cfg-warn-modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cfgw-title" style="max-width:520px">
+    <p class="kicker" style="margin:0">
+      <svg class="ic"><use href="#i-alert"/></svg>
+      <span class="fa" id="cfgw-title">هشدار: تعداد کانفیگ‌ها از ۲۰۰ گذشت</span>
+      <span class="en">CONFIG COUNT EXCEEDS 200</span>
+    </p>
+    <p class="labor" id="cfg-warn-text" style="margin-top:10px"></p>
+    <p class="hint">
+      <span class="fa">فرمول تعداد: (دامنهٔ اصلی + دامنه‌های سفارشی + IPهای تمیز) × پورت‌ها × پروتکل‌ها × (لوکیشن‌ها + ۱). اشتراک هر مشترک روی ۲۰۰ نود سقف می‌خورد؛ تعداد بیشتر فقط هزینهٔ محاسبه اضافه می‌کند و کلاینت‌ها را سنگین می‌کند. برای کاهش: پورت‌های کمتری را فعال کنید، تعداد IPهای تمیز را کم کنید یا لوکیشن‌ها را کاهش دهید.</span>
+      <span class="en">Count formula: (main domain + custom domains + clean IPs) × ports × protocols × (locations + 1). Each subscription is hard-capped at 200 nodes; anything above only burns CPU and weighs clients down. To reduce: enable fewer ports, fewer clean IPs or fewer locations.</span>
+    </p>
+    <div class="actions" style="margin-top:12px">
+      <button class="btn danger sm-btn" id="cfg-warn-back" type="button">
+        <svg class="ic ic-sm"><use href="#i-x"/></svg>
+        <span class="fa">بازگشت و کاهش تعداد</span><span class="en">GO BACK &amp; REDUCE</span>
+      </button>
+      <button class="btn sm-btn" id="cfg-warn-go" type="button">
+        <svg class="ic ic-sm"><use href="#i-check"/></svg>
+        <span class="fa">ادامه می‌دهم (تا ۲۰۰ نود ساخته می‌شود)</span><span class="en">CONTINUE (CAPPED AT 200 NODES)</span>
+      </button>
+    </div>
   </div>
 </div>
 

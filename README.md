@@ -1,11 +1,11 @@
 <div align="center">
 
-# ARAL URANIUM · V1.0 — REACTOR DECK · URANIUM EDITION
+# ARAL URANIUM · V1.1 — REACTOR DECK · URANIUM EDITION
 
 **نسل تازهٔ پنل آزاد و رایگانِ مدیریت اشتراک VLESS، Trojan و Shadowsocks و پروکسی رسمی تلگرام روی شبکهٔ ابری کلادفلر — با طراحی کاملاً بازنویسی‌شدهٔ Uranium**
 *The brand-new generation of the free serverless VLESS, Trojan & Shadowsocks panel on Cloudflare Workers & Pages — fully redesigned Uranium edition*
 
-![Version](https://img.shields.io/badge/Version-1.0.0_URANIUM-00ff9d?style=flat-square) ![Runtime](https://img.shields.io/badge/Cloudflare-Workers%20%26%20Pages-050807?style=flat-square) ![Theme](https://img.shields.io/badge/Theme-Uranium%20Reactor%20Deck-00b36f?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.1.0_URANIUM-00ff9d?style=flat-square) ![Runtime](https://img.shields.io/badge/Cloudflare-Workers%20%26%20Pages-050807?style=flat-square) ![Theme](https://img.shields.io/badge/Theme-Uranium%20Reactor%20Deck-00b36f?style=flat-square)
 
 [کانال رسمی / Official Channel — Telegram](https://t.me/AralDev)
 
@@ -62,6 +62,14 @@
   *Bulk operations: multi-select enable/disable/reset/delete*
 - **مخازن داده (Pools)**: IP تمیز و پروکسی عمومی — آپلود مستقیم در KV یا دریافت خودکار از مخزن GitHub خودتان
   *Data pools: paste into KV or auto-fetch from your own GitHub repo (`data/` folder)*
+- **دریافت کامل مخزن داده** — «دریافت کامل از گیت‌هاب» هر چهار فایل مخزن را مستقیم می‌خواند و **همهٔ موارد معتبر** را (تا سقف هر مخزن) در KV ذخیره می‌کند؛ با «بارگذاری کل مخزن» فهرست کامل در ویرایشگر باز می‌شود و ذخیرهٔ ناگهانیِ مخزن بزرگ با متن کوچک، هشدار تأیید می‌گیرد
+  *Full repository fetch — pulls all four repo files directly and persists every valid entry (up to each pool cap); “load full pool” opens the complete list in the editor and shrink-on-save is confirmation-guarded*
+- **انتخابگر آی‌پی تمیز در فرم مشترک** — نوع آدرس (IPv4 / IPv6 / دامنه / ترکیبی) و تعداد را مشخص کنید؛ کل مخزن ذخیره‌شده اسکن و همان تعداد برای مشترک انتخاب و درج می‌شود (موجودی هر مخزن هم نمایش داده می‌شود)
+  *Clean-IP picker in the subscriber form — choose type & count; the entire saved repository is scanned and the requested number of addresses is inserted (live per-pool availability readout)*
+- **هشدار عبور از ۲۰۰ کانفیگ** — شمارندهٔ زندهٔ تعداد کانفیگ هر مشترک (فرمول: آدرس‌ها × پورت‌ها × پروتکل‌ها × (لوکیشن‌ها + ۱)) داخل فرم؛ هنگام ذخیره اگر از ۲۰۰ بگذرد، هشدار «ادامه می‌دهم / بازگشت و کاهش» نمایش داده می‌شود و در کارت هر مشترک، چیپ تعداد کانفیگ با حالت هشدار دیده می‌شود
+  *>200-config warning — live per-subscriber config counter inside the form; saving above the 200-node cap triggers a continue-or-reduce warning and every subscriber card shows a config-count chip*
+- **ثابت‌کردن آی‌پی کانفیگ (قفل آی‌پی)** — برای هر مشترک می‌توانید آی‌پی‌های کانفیگ را قفل کنید: چرخش خودکار کامل خاموش می‌شود و فهرست آی‌پی‌ها همیشه ثابت می‌ماند؛ با فعال‌سازی قفل روی فهرست خالی، پیش‌فرض پنل به‌صورت خودکار ثبت می‌شود و در کارت مشترک «ثابت (قفل‌شده)» دیده می‌شود
+  *Fixed/pinned config IPs per subscriber — IP lock fully disables rotation and freezes the list (auto-snapshotted from panel defaults when empty); the subscriber card shows “FIXED (LOCKED)”*
 - **پیش‌تنظیم‌های اپراتوری ایران**: همراه اول، ایرانسل، رایتل، مخابرات و گیمینگ — یک‌ضرب روی هر مشترک
   *Iranian ISP fragmentation presets (MCI / Irancell / Rightel / TCI / Gaming) per subscriber*
 - **بات مدیریتی تلگرام** — توکن بات + آیدی عددی ادمین را در پنل ثبت کنید؛ وبهوک خودکار ست می‌شود. `/start` منوی «مشترکین» و «پنل» را می‌دهد و با انتخاب هر مشترک، QR پنل + همهٔ لینک‌های اشتراک + نودهای اصلی در تلگرام ارسال می‌شود.
@@ -127,7 +135,7 @@
 npm install          # نصب وابستگی‌ها / install dependencies
 npm run build        # ساخت worker-single-file.js + panel-preview.html + dist/
 npm run dev          # اجرای محلی با wrangler
-npm test             # تست E2E با playwright (17/17)
+npm test             # تست E2E با playwright (18/18)
 node shot-verify.mjs # اسکرین‌شات بصری همهٔ نماها / visual screenshots
 ```
 

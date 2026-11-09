@@ -1644,6 +1644,8 @@
       if (p) p.hidden = t !== tabName;
     });
     if (tabName === 'advisor') renderAdvisorSkeleton();
+    // URANIUM: refresh pool counts/badges whenever the network tab is opened
+    if (tabName === 'net' && typeof loadPoolCurrent === 'function') loadPoolCurrent();
   }
 
   document.querySelectorAll('.tab-btn').forEach(function (btn) {
@@ -1865,7 +1867,13 @@
     if (u.autoResetDays > 0) chips.push('<span class="chip mono">' + esc(tr('ریست ' + u.autoResetDays + ' روزه', u.autoResetDays + 'D RESET')) + '</span>');
     if (u.blockAdult) chips.push('<span class="chip mono">18+</span>');
     if (u.blockAds) chips.push('<span class="chip mono">ADS</span>');
-    if (u.autoRotateIps) chips.push('<span class="chip mono">' + svgIcon('refresh', 'ic-sm') + ' IP</span>');
+    if (u.lockIps) chips.push('<span class="chip mono fixedip">' + svgIcon('lock', 'ic-sm') + ' ' + esc(tr('IP ثابت', 'FIXED IP')) + '</span>');
+    else if (u.autoRotateIps) chips.push('<span class="chip mono">' + svgIcon('refresh', 'ic-sm') + ' IP</span>');
+    // URANIUM: config-count chip (uncapped estimate vs the 200-node subscription cap)
+    var cfgN = Number(u.rawNodeCount != null ? u.rawNodeCount : u.nodeCount) || 0;
+    if (cfgN > 0) {
+      chips.push('<span class="chip mono' + (cfgN > 200 ? ' warn' : '') + '" title="' + esc(tr('تعداد کانفیگ‌های این مشترک', 'config count')) + '">' + svgIcon('bolt', 'ic-sm') + ' ' + cfgN + (cfgN > 200 ? ' / 200' : '') + '</span>');
+    }
     return chips.length ? '<div class="user-chips">' + chips.join(' ') + '</div>' : '';
   }
 
@@ -2062,10 +2070,15 @@
     $('uf-ips').value = u && Array.isArray(u.ips) ? u.ips.join('\n') : '';
     $('uf-autorot-ips').checked = u ? Boolean(u.autoRotateIps) : false;
     $('uf-ipcount').value = u ? String(u.ipCount || 15) : '15';
-    // ULTRA: rotation pool type, per-user ports, separate request-reset + lifetime readout
+    // URANIUM: rotation pool type, per-user ports, separate request-reset + lifetime readout
     $('uf-pooltype').value = u ? String(u.poolType || '') : '';
     $('uf-ports').value = u ? String(u.ports || '') : '';
     $('uf-autoreset-req').value = u ? String(u.autoResetReqDays || 0) : '0';
+    // URANIUM: fixed/pinned config IPs
+    if ($('uf-lock-ips')) $('uf-lock-ips').checked = u ? Boolean(u.lockIps) : false;
+    syncLockIpsUi();
+    refreshPickerAvailability();
+    updateCfgCountEstimate();
     var lifeEl = $('uf-lifetime');
     if (lifeEl) {
       var lifeUp = (u && Number(u.lifetimeUpBytes)) || 0;
@@ -2157,9 +2170,11 @@
       row.querySelector('.loc-del').onclick = function () {
         row.remove();
         renumberLocRows();
+        updateCfgCountEstimate();
       };
       list.appendChild(row);
     });
+    updateCfgCountEstimate();
   }
 
   function renumberLocRows() {
@@ -2211,6 +2226,8 @@
       ips: textToLines($('uf-ips').value),
       autoRotateIps: $('uf-autorot-ips').checked,
       ipCount: Number($('uf-ipcount').value) || 15,
+      // URANIUM: fixed/pinned config IPs (disables rotation entirely)
+      lockIps: $('uf-lock-ips') ? $('uf-lock-ips').checked : false,
       // ULTRA: pool type + per-user ports + separate request auto-reset
       poolType: $('uf-pooltype').value || '',
       ports: $('uf-ports').value.trim() || '',
@@ -2221,6 +2238,140 @@
     if ($('uf-uuid').value.trim()) payload.uuid = $('uf-uuid').value.trim();
     if ($('uf-tr').value.trim()) payload.trojanPassword = $('uf-tr').value.trim();
     return payload;
+  }
+
+  /* ── URANIUM: fixed/pinned config IPs — lock interplay ── */
+  function syncLockIpsUi() {
+    var lockEl = $('uf-lock-ips');
+    if (!lockEl) return;
+    var locked = lockEl.checked;
+    var hint = $('uf-lock-hint');
+    if (hint) hint.hidden = !locked;
+    var rotFields = $('uf-rot-fields');
+    if (rotFields) rotFields.classList.toggle('is-locked', locked);
+    if (locked) {
+      $('uf-autorot-ips').checked = false;
+      $('uf-autorot-ips').disabled = true;
+    } else {
+      $('uf-autorot-ips').disabled = false;
+    }
+  }
+
+  /* ── URANIUM: repository picker availability readout ── */
+  var pickerAvailCache = { at: 0, data: null };
+  function refreshPickerAvailability(force) {
+    var el = $('uf-pick-avail');
+    if (!el) return;
+    var now = Date.now();
+    if (!force && pickerAvailCache.data && now - pickerAvailCache.at < 60_000) {
+      renderPickerAvail(el, pickerAvailCache.data);
+      return;
+    }
+    api('/api/pools', 'GET').then(function (r) {
+      var counts = {};
+      ['proxy', 'ips4', 'ips6', 'dom'].forEach(function (k) {
+        counts[k] = r && r.pools && r.pools[k] ? r.pools[k].count : 0;
+      });
+      pickerAvailCache = { at: now, data: counts };
+      renderPickerAvail(el, counts);
+    }).catch(function () {});
+  }
+  function renderPickerAvail(el, counts) {
+    el.textContent = tr(
+      'موجودی مخزن — IP4: ' + (counts.ips4 || 0) + ' · IP6: ' + (counts.ips6 || 0) + ' · دامنه: ' + (counts.dom || 0),
+      'REPO — v4: ' + (counts.ips4 || 0) + ' · v6: ' + (counts.ips6 || 0) + ' · dom: ' + (counts.dom || 0)
+    );
+  }
+
+  /* ── URANIUM: live config-count estimator (mirrors server node math) ── */
+  var TLS_PORT_UNIVERSE_UI = [443, 2053, 2083, 2087, 2096, 8443];
+  var HTTP_PORT_UNIVERSE_UI = [80, 8080, 8880, 2052, 2082, 2086, 2095];
+
+  function parseEndpointUi(entry) {
+    var s = String(entry || '').split('#')[0].trim();
+    if (!s) return null;
+    var at = s.lastIndexOf('@');
+    var addrPart = at >= 0 ? s.slice(at + 1) : s;
+    var m = addrPart.match(/^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/);
+    if (!m) return { host: addrPart, port: 0 };
+    return { host: m[1].replace(/^\[|\]$/g, ''), port: m[2] ? Number(m[2]) : 0 };
+  }
+
+  function estimateFormNodeCount() {
+    try {
+      var s = STATE.settings || {};
+      var hostOnly = (location.hostname || '').split(':')[0];
+      var allTls = (s.tlsPorts && s.tlsPorts.length ? s.tlsPorts : [443]).map(Number);
+      var allHttp = (s.httpPorts && s.httpPorts.length ? s.httpPorts : [80]).map(Number);
+      var raw = String($('uf-ports') ? $('uf-ports').value : '').trim();
+      var tlsPorts = allTls, httpPorts = [], httpOn = false;
+      if (raw) {
+        var picked = raw.split(/[\s,;]+/).map(Number).filter(function (p) { return Number.isInteger(p); });
+        var tlsSel = picked.filter(function (p) { return TLS_PORT_UNIVERSE_UI.indexOf(p) >= 0; });
+        var httpSel = picked.filter(function (p) { return HTTP_PORT_UNIVERSE_UI.indexOf(p) >= 0; });
+        tlsPorts = tlsSel.length ? tlsSel : allTls.filter(function (p) { return picked.indexOf(p) >= 0; });
+        httpPorts = httpSel;
+        httpOn = httpSel.length > 0;
+        if (!tlsPorts.length) tlsPorts = [443];
+      } else {
+        httpOn = Boolean(s.enableHttpPorts);
+        httpPorts = allHttp;
+      }
+
+      var vlessOn = $('uf-p-vless').checked;
+      var trojanOn = $('uf-p-trojan').checked;
+      var ssOn = $('uf-p-ss').checked;
+      if (!vlessOn && !trojanOn && !ssOn) {
+        vlessOn = s.enableVless !== false;
+        trojanOn = Boolean(s.enableTrojan);
+        ssOn = Boolean(s.enableSS);
+      }
+
+      var tlsSlots = tlsPorts.length; // primary host domain
+      var httpEndpoints = 1;
+      (s.customDomains || []).forEach(function (d) {
+        var parsed = parseEndpointUi(d);
+        if (!parsed || !parsed.host || parsed.host.toLowerCase() === hostOnly.toLowerCase()) return;
+        tlsSlots += parsed.port ? 1 : tlsPorts.length;
+        httpEndpoints += 1;
+      });
+      var ips = textToLines($('uf-ips').value);
+      var cleanSource = ips.length ? ips : (s.cleanIPs || []);
+      cleanSource.forEach(function (item) {
+        var parsed = parseEndpointUi(item);
+        if (!parsed || !parsed.host) return;
+        tlsSlots += parsed.port ? 1 : tlsPorts.length;
+        httpEndpoints += 1;
+      });
+
+      var locCount = collectLocFields().filter(function (x) { return x.proxy; }).length;
+      var locMult = locCount + 1;
+      var httpSlots = httpOn ? httpEndpoints * httpPorts.length : 0;
+      var rawCount = ((vlessOn ? tlsSlots + httpSlots : 0) +
+        (trojanOn ? tlsSlots : 0) +
+        (ssOn ? tlsSlots : 0)) * locMult;
+      return Math.max(1, rawCount);
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function updateCfgCountEstimate() {
+    var el = $('uf-cfgcount');
+    var note = $('uf-cfgcount-note');
+    if (!el) return;
+    var est = estimateFormNodeCount();
+    if (!est) { el.textContent = '—'; return; }
+    el.textContent = String(est);
+    el.classList.remove('is-ok', 'is-warn', 'is-bad');
+    if (est > 200) el.classList.add('is-bad');
+    else if (est > 160) el.classList.add('is-warn');
+    else el.classList.add('is-ok');
+    if (note) {
+      note.textContent = est > 200
+        ? tr('بیش از سقف ۲۰۰ نود — هنگام ذخیره هشدار می‌گیرید', 'above the 200-node cap — you will be warned on save')
+        : tr('زیر سقف ۲۰۰ نود', 'within the 200-node cap');
+    }
   }
 
   $('uf-gen-uuid').onclick = function () { $('uf-uuid').value = uuid4(); };
@@ -2312,6 +2463,49 @@
     };
   });
 
+  /* ── URANIUM: IP lock, repository picker & live config counter wiring ── */
+  if ($('uf-lock-ips')) {
+    $('uf-lock-ips').addEventListener('change', function () {
+      syncLockIpsUi();
+      updateCfgCountEstimate();
+    });
+  }
+  ['uf-ips', 'uf-ports'].forEach(function (id) {
+    if ($(id)) $(id).addEventListener('input', updateCfgCountEstimate);
+  });
+  ['uf-p-vless', 'uf-p-trojan', 'uf-p-ss', 'uf-pick-type', 'uf-pick-count'].forEach(function (id) {
+    if ($(id)) $(id).addEventListener('change', updateCfgCountEstimate);
+  });
+  if ($('uf-loc-add')) $('uf-loc-add').addEventListener('click', updateCfgCountEstimate);
+  if ($('uf-loc-clear')) $('uf-loc-clear').addEventListener('click', updateCfgCountEstimate);
+
+  if ($('uf-pick-btn')) {
+    $('uf-pick-btn').onclick = async function () {
+      var btn = $('uf-pick-btn');
+      var want = Math.max(1, Math.min(200, Number($('uf-pick-count').value) || 15));
+      var poolType = $('uf-pick-type').value || '';
+      btn.disabled = true;
+      showToast(tr('در حال اسکن کل مخزن داده…', 'Scanning the full data repository…'), tr('در حال اسکن کل مخزن داده…', 'Scanning the full data repository…'));
+      try {
+        var r = await api('/api/pools?pick=' + want + '&pool=' + encodeURIComponent(poolType), 'GET');
+        var list = (r && r.list) || [];
+        if (!list.length) {
+          showToast(tr('مخزن خالی است — ابتدا در تب شبکه، مخزن داده را پر کنید', 'Repository empty — populate the data pools first'), tr('Repository empty — populate the data pools first'));
+          refreshPickerAvailability(true);
+          return;
+        }
+        $('uf-ips').value = list.join('\n');
+        showToast(list.length + ' ' + tr('آدرس از مخزن انتخاب و درج شد', 'addresses picked from the repository'), list.length + ' addresses picked');
+        refreshPickerAvailability(true);
+        updateCfgCountEstimate();
+      } catch (err) {
+        showToast(err.message, err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  }
+
   if ($('uf-fill-pattern')) {
     $('uf-fill-pattern').onclick = function () {
       $('uf-fm').value = JSON.stringify({
@@ -2373,6 +2567,50 @@
     }
   };
 
+  /* ── URANIUM: >200-configs warning gate (continue-or-reduce, Zeus-style) ── */
+  var cfgWarnArmed = true;
+  function showCfgWarnModal(est) {
+    var modal = $('cfg-warn-modal');
+    if (!modal) return false;
+    est = Math.max(0, Math.floor(Number(est) || 0));
+    var txt = $('cfg-warn-text');
+    if (txt) {
+      // est is a sanitized integer — safe to interpolate into markup.
+      txt.innerHTML = tr(
+        'با تنظیمات فعلی، حدود <b>' + est + '</b> کانفیگ برای این مشترک ساخته می‌شود که از سقف <b>۲۰۰</b> بیشتر است. اگر مایل به ادامه هستید «ادامه می‌دهم» را بزنید — اشتراک روی ۲۰۰ نود سقف می‌خورد؛ در غیر این صورت «بازگشت و کاهش» را بزنید و پورت‌ها، IPهای تمیز یا لوکیشن‌ها را کم کنید.',
+        'Current settings would produce about <b>' + est + '</b> configs for this subscriber — above the <b>200</b> cap. Choose “Continue” to proceed (the subscription is capped at 200 nodes), or “Go back &amp; reduce” and lower ports, clean IPs or locations.'
+      );
+    }
+    modal.hidden = false;
+    return true;
+  }
+  function hideCfgWarnModal() {
+    var modal = $('cfg-warn-modal');
+    if (modal) modal.hidden = true;
+  }
+  if ($('cfg-warn-back')) {
+    $('cfg-warn-back').onclick = function () {
+      hideCfgWarnModal();
+      cfgWarnArmed = true;
+      showToast(tr('بازگشت — تعداد را کاهش دهید و دوباره ذخیره کنید', 'Went back — reduce the count and save again'), tr('Went back — reduce the count and save again'));
+    };
+  }
+  if ($('cfg-warn-go')) {
+    $('cfg-warn-go').onclick = function () {
+      hideCfgWarnModal();
+      cfgWarnArmed = false; // one-shot bypass so the re-submit goes through
+      var form = $('f-user');
+      if (form) {
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else {
+          var ev2 = document.createEvent('Event');
+          ev2.initEvent('submit', true, true);
+          form.dispatchEvent(ev2);
+        }
+      }
+    };
+  }
+
   $('f-user').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     var editId = $('uf-id').value;
@@ -2382,6 +2620,13 @@
     if (!payload.name) {
       payload.name = tr('مشترک تازه', 'New subscriber');
     }
+    // URANIUM: warn when the estimated config count exceeds the 200-node cap.
+    // “Continue” re-submits with cfgWarnArmed disarmed so the save goes through.
+    if (cfgWarnArmed) {
+      var est = estimateFormNodeCount();
+      if (est > 200 && showCfgWarnModal(est)) return;
+    }
+    cfgWarnArmed = true;
     try {
       var res;
       if (editId) {
@@ -3749,6 +3994,7 @@
 
   // pools UI
   var currentPoolKind = 'proxy';
+  var POOL_EDITOR_LIMIT = 20000; // lines loaded into the editor at once (perf guard)
   document.querySelectorAll('.pool-kind').forEach(function (b) {
     b.onclick = function () {
       document.querySelectorAll('.pool-kind').forEach(function (x) { x.classList.remove('active'); });
@@ -3757,6 +4003,16 @@
       loadPoolCurrent();
     };
   });
+  function renderPoolStatBadges(pools) {
+    document.querySelectorAll('#pool-stat-badges [data-poolstat]').forEach(function (el) {
+      var kind = el.getAttribute('data-poolstat');
+      var n = pools && pools[kind] ? pools[kind].count : 0;
+      var label = { proxy: 'PROXY', ips4: 'IPv4', ips6: 'IPv6', dom: 'DOM' }[kind] || kind;
+      el.textContent = label + ' ' + n;
+      el.classList.toggle('is-empty', !n);
+      el.classList.toggle('is-full', n > 0);
+    });
+  }
   async function loadPoolCurrent() {
     try {
       var r = await api('/api/pools', 'GET');
@@ -3764,22 +4020,61 @@
       if ($('pool-count')) {
         $('pool-count').textContent = (info ? info.count : 0) + ' ' + tr('ورودی', 'entries');
       }
+      renderPoolStatBadges(r.pools);
       if (info && info.count > 0) {
         var lines = currentPoolKind === 'proxy'
           ? info.sample.map(function (x) { return x.p + (x.c ? '  #' + x.c : ''); })
           : info.sample;
-        $('pool-text').value = '/* ' + tr('نمایش ' + Math.min(8, info.count) + ' مورد از ' + info.count + ' — برای جایگزینی کامل، متن جدید ذخیره کنید', 'showing first ' + Math.min(8, info.count) + ' of ' + info.count + ' — save new text to replace') + ' */\n' + lines.join('\n');
+        $('pool-text').value = '/* ' + tr('پیش‌نمایش ' + Math.min(8, info.count) + ' مورد از ' + info.count + ' — دکمهٔ «بارگذاری کل مخزن ذخیره‌شده» فهرست کامل را می‌آورد؛ ذخیره، کل مخزن را با متن ویرایشگر جایگزین می‌کند', 'preview of ' + Math.min(8, info.count) + ' of ' + info.count + ' — press “Load full pool” for the complete list; saving replaces the whole pool with the editor text') + ' */\n' + lines.join('\n');
+        $('pool-text').classList.add('is-preview');
       } else {
         $('pool-text').value = '';
+        $('pool-text').classList.remove('is-preview');
       }
       if ($('pool-repo')) $('pool-repo').value = r.dataRepo || '';
+      pickerAvailCache = { at: 0, data: null };
     } catch (err) { /* panel not ready */ }
   }
-  if ($('btn-pool-load')) $('btn-pool-load').onclick = loadPoolCurrent;
+  async function loadFullPoolIntoEditor() {
+    try {
+      var r = await api('/api/pools?full=' + encodeURIComponent(currentPoolKind), 'GET');
+      var list = (r && r.list) || [];
+      if (!list.length) {
+        showToast(tr('این مخزن خالی است', 'This pool is empty'), tr('This pool is empty'));
+        return;
+      }
+      var lines = currentPoolKind === 'proxy'
+        ? list.map(function (x) { return x.p + (x.c ? '  #' + x.c : ''); })
+        : list;
+      if (lines.length > POOL_EDITOR_LIMIT) {
+        $('pool-text').value = '/* ' + tr('نمایش ' + POOL_EDITOR_LIMIT + ' خط اول از ' + lines.length + ' — برای عملکرد مرورگر؛ ذخیره فقط متن همین ویرایشگر را می‌نویسد', 'first ' + POOL_EDITOR_LIMIT + ' of ' + lines.length + ' lines — browser perf guard; saving writes only the editor text') + ' */\n' + lines.slice(0, POOL_EDITOR_LIMIT).join('\n');
+      } else {
+        $('pool-text').value = lines.join('\n');
+      }
+      $('pool-text').classList.remove('is-preview');
+      showToast(lines.length + ' ' + tr('ورودی کامل بارگذاری شد', 'entries fully loaded'), lines.length + ' entries fully loaded');
+    } catch (err) {
+      showToast(err.message, err.message);
+    }
+  }
+  if ($('btn-pool-load')) $('btn-pool-load').onclick = loadFullPoolIntoEditor;
   if ($('btn-pool-save')) {
     $('btn-pool-save').onclick = async function () {
       var text = $('pool-text').value;
       var cleaned = text.replace(/\/\*[\s\S]*?\*\//g, '');
+      // URANIUM: guard against accidentally replacing a big pool with the preview sample
+      try {
+        var overview = await api('/api/pools', 'GET');
+        var curCount = overview && overview.pools && overview.pools[currentPoolKind] ? overview.pools[currentPoolKind].count : 0;
+        var newCount = cleaned.split(/\r?\n/).filter(function (l) { return l.trim(); }).length;
+        if (curCount >= 20 && newCount < curCount / 2) {
+          var ok = window.confirm(tr(
+            'مخزن فعلی ' + curCount + ' ورودی دارد ولی متن ویرایشگر فقط ' + newCount + ' خط دارد. ذخیره، کل مخزن را با همین متن جایگزین می‌کند. ادامه می‌دهید؟',
+            'The current pool has ' + curCount + ' entries but the editor text only has ' + newCount + ' lines. Saving replaces the whole pool with this text. Continue?'
+          ));
+          if (!ok) return;
+        }
+      } catch (e) { /* overview optional */ }
       try {
         var r = await api('/api/pools', 'PUT', { kind: currentPoolKind, text: cleaned });
         showToast(r.count + ' ' + tr('ورودی ذخیره شد', 'entries saved'), r.count + ' entries saved');
@@ -3804,12 +4099,12 @@
     $('btn-pool-fetch').onclick = async function () {
       var repo = $('pool-repo').value.trim();
       if (!repo) { showToast(tr('نام مخزن را وارد کنید', 'Enter a repo name'), tr('نام مخزن را وارد کنید', 'Enter a repo name')); return; }
-      showToast(tr('در حال دریافت…', 'Fetching…'), tr('در حال دریافت…', 'Fetching…'));
+      showToast(tr('در حال دریافت کامل از گیت‌هاب…', 'Fetching the full repository…'), tr('در حال دریافت کامل از گیت‌هاب…', 'Fetching the full repository…'));
       try {
         var r = await api('/api/pools/fetch', 'POST', { repo: repo });
         var parts = [];
         Object.keys(r.results || {}).forEach(function (k) { parts.push(k + ': ' + r.results[k]); });
-        showToast(parts.join(' · '), parts.join(' · '));
+        showToast(tr('دریافت کامل شد — ', 'Full fetch done — ') + parts.join(' · '), 'Full fetch — ' + parts.join(' · '));
         loadPoolCurrent();
       } catch (err) {
         showToast(err.message, err.message);

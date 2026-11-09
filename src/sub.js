@@ -70,6 +70,8 @@ export function buildWsPath(settings) {
 /* ULTRA: per-user clean-IP rotation — hydrates `ips` from community pools before node build */
 export async function hydrateUserAddresses(env, userView, settings) {
   if (!userView) return userView;
+  // URANIUM: a locked (pinned) IP list must NEVER rotate.
+  if (userView.lockIps) return userView;
   const explicit = Array.isArray(userView.ips) && userView.ips.length > 0;
   if (!userView.autoRotateIps || explicit) return userView;
   try {
@@ -181,7 +183,6 @@ export function computeQuickUserNodeMeta(user, settings, requestHost) {
       (protoFlags.trojan ? tlsPortSlots : 0) +
       (protoFlags.ss ? tlsPortSlots : 0)) * locMultiplier;
   const nodeCount = Math.min(200, rawCount);
-
   const encPath = encodeURIComponent(wsPath);
   const fp = encodeURIComponent(dpi.fingerprint);
   const alpn = encodeURIComponent(settings.alpn || 'http/1.1');
@@ -197,7 +198,7 @@ export function computeQuickUserNodeMeta(user, settings, requestHost) {
     ? `trojan://${encodeURIComponent(user.trojanPassword)}@${hostOnly}:${firstPort}?security=tls&sni=${hostOnly}&fp=${fp}&alpn=${alpn}&type=ws&host=${hostOnly}&path=${encPath}#${encodeURIComponent(tName)}`
     : '';
 
-  return { nodeCount, primaryVless, primaryTrojan };
+  return { nodeCount, rawNodeCount: rawCount, primaryVless, primaryTrojan };
 }
 
 /**
@@ -1318,6 +1319,7 @@ export function renderSubscriberPressPass(userView, settings, requestHost, asset
           ${(userView.requestLimit || 0) > 0 ? `<tr><th><span class="fa">سهمیهٔ اتصال</span><span class="en">REQUESTS</span></th><td class="mono">${userView.usedRequests || 0} / ${userView.requestLimit}</td></tr>` : ''}
           ${(userView.ipLimit || 0) > 0 ? `<tr><th><span class="fa">دستگاه‌های همزمان</span><span class="en">DEVICES</span></th><td class="mono">${userView.activeIpCount || 0} / ${userView.ipLimit}</td></tr>` : ''}
           <tr><th><span class="fa">تعدادِ نودها</span><span class="en">NODES</span></th><td class="mono">${nodes.length}</td></tr>
+          <tr><th><span class="fa">آی‌پی کانفیگ</span><span class="en">CONFIG IPs</span></th><td>${userView.lockIps ? '<span class="badge ok"><span class="fa">ثابت (قفل‌شده)</span><span class="en">FIXED (LOCKED)</span></span>' : (userView.autoRotateIps ? '<span class="badge"><span class="fa">چرخش خودکار</span><span class="en">AUTO-ROTATE</span></span>' : '<span class="badge"><span class="fa">پیش‌فرض پنل</span><span class="en">PANEL DEFAULT</span></span>')}</td></tr>
           <tr><th><span class="fa">وضعیت زنده</span><span class="en">LIVE</span></th><td>${isOnline ? '<span class="badge ok"><span class="fa">آنلاین</span><span class="en">ONLINE</span></span>' : '<span class="badge"><span class="fa">آفلاین</span><span class="en">OFFLINE</span></span>'}</td></tr>
         </tbody>
       </table>

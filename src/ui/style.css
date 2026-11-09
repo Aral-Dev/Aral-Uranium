@@ -556,9 +556,12 @@ html[data-theme="light"] .tab-btn.active .tnum{color:#fff}
 html[data-theme="light"] .seg-btn.active{color:#fff}
 
 /* ───────────────────────── sub links & QR ──────────────────────────────── */
-.sub-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px}
+/* FIX: minmax(0,1fr) let auto-fit squeeze every button into one clipped row
+ * (truncated labels like "…ent (Xray)"). A 210px floor forces proper wrapping,
+ * and labels may now wrap to a second line instead of being cut by the clip-path. */
+.sub-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:8px}
 @media(max-width:640px){.sub-grid{grid-template-columns:1fr}}
-.sub-grid .btn{width:100%}
+.sub-grid .btn{width:100%;white-space:normal;line-height:1.55;text-align:center}
 .qr-center{display:flex;flex-direction:column;align-items:center;gap:6px}
 .qrbox{
   background:#f4f9f4;padding:12px;border:1px solid var(--line);
@@ -629,6 +632,27 @@ html[data-theme="light"] .seg-btn.active{color:#fff}
 .pool-kinds{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pool-kind.active{color:#03130b;background:var(--uranium);border-color:var(--uranium);font-weight:700}
 html[data-theme="light"] .pool-kind.active{color:#fff}
+
+/* ── URANIUM: pools — per-kind stat badges, editor states ── */
+.pool-stat-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pool-stat-badges .badge{font-size:10.5px;padding:3px 10px}
+.pool-stat-badges .badge.is-empty{color:var(--err);border-color:rgba(255,85,69,.4)}
+.pool-stat-badges .badge.is-full{color:var(--uranium);border-color:var(--line);background:var(--uranium-soft)}
+#pool-text.is-preview{opacity:.85}
+
+/* ── URANIUM: user modal — IP lock, repository picker, live config counter ── */
+.ippick-box{background:var(--field);border:1px solid var(--hairline);padding:12px;margin-top:8px}
+.cfgcount-row{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:var(--field);border:1px solid var(--hairline);padding:10px 12px;margin-top:12px;
+}
+.cfgcount-row .badge{font-size:13px;padding:4px 14px;font-weight:700}
+#uf-cfgcount.is-ok{color:var(--uranium);border-color:var(--line);background:var(--uranium-soft)}
+#uf-cfgcount.is-warn{color:var(--fire);border-color:var(--line-fire);background:var(--fire-soft)}
+#uf-cfgcount.is-bad{color:#fff;border-color:var(--err);background:var(--err)}
+#uf-rot-fields.is-locked{opacity:.45;pointer-events:none}
+.chip.warn{color:var(--fire);border-color:var(--line-fire);background:var(--fire-soft)}
+.chip.fixedip{color:var(--uranium);border-color:var(--line);background:var(--uranium-soft)}
 
 /* ───────────────────────── advisor ─────────────────────────────────────── */
 .adv-summary{background:var(--field);border:1px solid var(--hairline);padding:14px;margin-top:12px}

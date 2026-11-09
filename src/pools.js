@@ -116,10 +116,14 @@ export function parseListText(text, kind) {
   return out;
 }
 
-export async function getPool(env, kind, { forceRepo = false } = {}) {
+export async function getPool(env, kind, { forceRepo = false, bypassCache = false } = {}) {
   const cached = ramCache.get(kind);
   const now = Date.now();
-  if (cached && now - cached.at < RAM_TTL_MS) return cached.data;
+  /* URANIUM FIX: bypassCache lets the admin "fetch from GitHub" flow read the
+   * repo DIRECTLY. Previously the 10-minute RAM cache short-circuited the fetch,
+   * so clicking fetch just re-saved whatever was already cached (e.g. 8 stale
+   * entries) instead of pulling the full repository file. */
+  if (!bypassCache && cached && now - cached.at < RAM_TTL_MS) return cached.data;
 
   let data = null;
   const kv = findKVBinding(env);
@@ -187,6 +191,14 @@ async function fetchRepoPool(env, repo, kind) {
   return null;
 }
 
+/** URANIUM: pull a pool straight from the GitHub data repo — no RAM/KV shortcut.
+ * Returns the FULL parsed list (capped only by POOL_LIMITS) or null. */
+export async function fetchRepoPoolDirect(env, repo, kind) {
+  if (!repo || !/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(repo)) return null;
+  const direct = await fetchRepoPool(env, repo, kind);
+  return direct && direct.length ? direct : null;
+}
+
 export async function savePool(env, kind, parsed) {
   const kv = findKVBinding(env);
   const capped = parsed.slice(0, POOL_LIMITS[kind]);
@@ -228,7 +240,9 @@ export function sampleFrom(list, count) {
  *  ULTRA: user.poolType narrows the rotation to a single pool kind
  *  ('ipv4' | 'ipv6' | 'domain'); '' (default) keeps the proportional mix. */
 export async function rotateCleanAddresses(env, user, settings) {
-  const want = Math.max(1, Math.min(120, Number(user.ipCount) || 15));
+  // URANIUM: ceiling raised 120 → 200 to match the per-user fixed-list cap and
+  // the repository picker (the 200-node subscription cap stays the real limit).
+  const want = Math.max(1, Math.min(200, Number(user.ipCount) || 15));
   const pools = await Promise.all([
     getPool(env, 'ips4'),
     getPool(env, 'ips6'),
